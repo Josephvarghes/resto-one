@@ -9,6 +9,8 @@ import {
   RefreshCw,
   ShoppingBag,
   Award,
+  Radio,
+  CheckCircle2,
 } from 'lucide-react';
 import { adminApi } from '../api';
 import { useWebSocket } from '../hooks/useWebSocket';
@@ -19,6 +21,7 @@ export function AdminDashboard() {
   const [insightsData, setInsightsData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [recentLiveEvent, setRecentLiveEvent] = useState(null);
 
   const fetchAnalytics = async () => {
     try {
@@ -29,10 +32,10 @@ export function AdminDashboard() {
     }
   };
 
-  const fetchInsights = async () => {
+  const fetchInsights = async (force = false) => {
     setIsLoadingInsights(true);
     try {
-      const res = await adminApi.getInsights();
+      const res = await adminApi.getInsights(force);
       setInsightsData(res.data);
     } catch (err) {
       console.error('Failed to load insights:', err);
@@ -43,15 +46,38 @@ export function AdminDashboard() {
 
   useEffect(() => {
     setIsLoading(true);
-    Promise.all([fetchAnalytics(), fetchInsights()]).finally(() => setIsLoading(false));
+    Promise.all([fetchAnalytics(), fetchInsights(false)]).finally(() => setIsLoading(false));
   }, [range]);
 
-  useWebSocket('admin', () => {
+  // Real-time WebSocket connection to admin channel
+  useWebSocket('admin', (msg) => {
+    // Re-fetch analytics immediately on any order event
     fetchAnalytics();
+
+    if (msg && msg.event) {
+      let label = 'Real-time order update received';
+      if (msg.event === 'order_created') {
+        label = `New Order #${msg.order?.id} Placed (Table #${msg.order?.table_no}) — ₹${msg.order?.total_amount}`;
+      } else if (msg.event === 'order_status_updated') {
+        label = `Order #${msg.order?.id} status updated to: ${msg.order?.status?.replace('_', ' ')}`;
+      } else if (msg.event === 'order_delayed') {
+        label = `Kitchen delay (+${msg.order?.delay_minutes}m) logged for Order #${msg.order?.id}`;
+      }
+
+      setRecentLiveEvent({
+        label,
+        timestamp: new Date().toLocaleTimeString(),
+      });
+
+      // Clear after 6 seconds
+      setTimeout(() => {
+        setRecentLiveEvent(null);
+      }, 6000);
+    }
   });
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 20px 80px 20px' }}>
+    <div style={{ maxWidth: '1400px', margin: '0 auto', padding: '24px 16px 80px 16px' }}>
       {/* Header */}
       <div
         style={{
@@ -60,7 +86,7 @@ export function AdminDashboard() {
           justifyContent: 'space-between',
           alignItems: 'center',
           gap: '16px',
-          marginBottom: '28px',
+          marginBottom: '24px',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
@@ -75,26 +101,59 @@ export function AdminDashboard() {
               alignItems: 'center',
               justifyContent: 'center',
               boxShadow: '0 0 20px rgba(245, 158, 11, 0.3)',
+              flexShrink: 0,
             }}
           >
             <Shield size={26} />
           </div>
           <div>
-            <h1 style={{ fontSize: '1.8rem', margin: 0 }}>Executive Intelligence</h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: 'clamp(1.4rem, 2.5vw, 1.8rem)', margin: 0 }}>
+                Executive Intelligence
+              </h1>
+              {/* Real-time Live Badge */}
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  background: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.35)',
+                  color: '#34d399',
+                  padding: '3px 9px',
+                  borderRadius: 'var(--radius-full)',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.04em',
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: '#10b981',
+                    display: 'inline-block',
+                    boxShadow: '0 0 8px #10b981',
+                  }}
+                />
+                LIVE REALTIME SYNC
+              </span>
+            </div>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
               Operational analytics, financial metrics, and Groq 120B strategic insights
             </span>
           </div>
         </div>
 
-        {/* Range Selector */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* Range Selector & Manual Refresh */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
           {['daily', 'weekly', 'monthly'].map((r) => (
             <button
               key={r}
               onClick={() => setRange(r)}
               className={`btn ${range === r ? 'btn-primary' : 'btn-outline'}`}
-              style={{ textTransform: 'capitalize', padding: '8px 16px', fontSize: '0.85rem' }}
+              style={{ textTransform: 'capitalize', padding: '8px 14px', fontSize: '0.84rem' }}
             >
               {r}
             </button>
@@ -102,15 +161,44 @@ export function AdminDashboard() {
           <button
             onClick={() => {
               fetchAnalytics();
-              fetchInsights();
+              fetchInsights(false);
             }}
             className="btn btn-outline"
-            title="Refresh"
+            title="Refresh View"
+            style={{ padding: '8px 12px' }}
           >
             <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
+
+      {/* Live Event Ticker (Real-Time Animation) */}
+      {recentLiveEvent && (
+        <div
+          style={{
+            background: 'linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(15, 23, 42, 0.95) 100%)',
+            border: '1px solid rgba(16, 185, 129, 0.4)',
+            borderRadius: 'var(--radius-md)',
+            padding: '10px 16px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '12px',
+            animation: 'fadeIn 0.25s ease',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <Radio size={18} color="#34d399" className="pulse-glow" />
+            <span style={{ fontSize: '0.88rem', color: '#f8fafc', fontWeight: 600 }}>
+              {recentLiveEvent.label}
+            </span>
+          </div>
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            {recentLiveEvent.timestamp}
+          </span>
+        </div>
+      )}
 
       {isLoading && !analytics ? (
         <div style={{ textAlign: 'center', padding: '80px 0', color: 'var(--text-muted)' }}>
@@ -123,9 +211,9 @@ export function AdminDashboard() {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: '20px',
-              marginBottom: '28px',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              gap: '16px',
+              marginBottom: '24px',
             }}
           >
             {/* Total Revenue */}
@@ -185,12 +273,12 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          {/* AI Insights Card */}
+          {/* AI Insights Card with Real Working Refresh AI Button */}
           <div
             className="glass-panel"
             style={{
-              padding: '28px',
-              marginBottom: '28px',
+              padding: '24px',
+              marginBottom: '24px',
               border: '1px solid rgba(245, 158, 11, 0.35)',
               background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.08) 0%, rgba(26, 34, 52, 0.9) 100%)',
             }}
@@ -198,8 +286,10 @@ export function AdminDashboard() {
             <div
               style={{
                 display: 'flex',
+                flexWrap: 'wrap',
                 justifyContent: 'space-between',
                 alignItems: 'center',
+                gap: '12px',
                 marginBottom: '20px',
               }}
             >
@@ -214,12 +304,13 @@ export function AdminDashboard() {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
                   <Sparkles size={20} />
                 </div>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <h2 style={{ fontSize: '1.25rem', margin: 0 }}>
                       AI Executive Insights
                     </h2>
@@ -235,25 +326,39 @@ export function AdminDashboard() {
                     >
                       Groq 120B
                     </span>
+                    {insightsData?.cached && (
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          background: 'rgba(255, 255, 255, 0.06)',
+                          color: 'var(--text-muted)',
+                          padding: '2px 8px',
+                          borderRadius: 'var(--radius-full)',
+                        }}
+                      >
+                        Cached
+                      </span>
+                    )}
                   </div>
                   <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Computed on login • Cached for 15 minutes
+                    Generated at {insightsData?.generated_at ? new Date(insightsData.generated_at).toLocaleTimeString() : 'now'}
                   </span>
                 </div>
               </div>
 
+              {/* Working Refresh AI button */}
               <button
-                onClick={fetchInsights}
+                onClick={() => fetchInsights(true)}
                 disabled={isLoadingInsights}
-                className="btn btn-outline"
-                style={{ fontSize: '0.82rem', padding: '6px 14px' }}
+                className="btn btn-primary"
+                style={{ fontSize: '0.85rem', padding: '8px 16px' }}
               >
                 <RefreshCw size={14} className={isLoadingInsights ? 'animate-spin' : ''} />
-                Refresh AI
+                {isLoadingInsights ? 'Regenerating AI...' : 'Refresh AI'}
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
               {insightsData?.insights?.map((insight, idx) => (
                 <div
                   key={idx}
@@ -293,8 +398,14 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          {/* Bottom Grid: Top Selling Dishes + Orders By Status */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '28px' }}>
+          {/* Bottom Grid: Top Selling Dishes + Orders By Status (Responsive) */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))',
+              gap: '24px',
+            }}
+          >
             {/* Top Dishes */}
             <div className="glass-panel" style={{ padding: '24px' }}>
               <h3 style={{ fontSize: '1.25rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>

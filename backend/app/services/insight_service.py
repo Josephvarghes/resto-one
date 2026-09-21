@@ -36,7 +36,7 @@ def get_analytics(db: Session, date_range: str = "daily") -> dict:
     for o in orders:
         status_counts[o.status] = status_counts.get(o.status, 0) + 1
 
-    # Dish sales
+    # Dish sales (top 5)
     items_query = (
         db.query(
             Dish.id,
@@ -63,16 +63,14 @@ def get_analytics(db: Session, date_range: str = "daily") -> dict:
         for row in items_query
     ]
 
-    total_revenue = sum(d["revenue"] for d in top_dishes)
-    # If no top dishes, calculate from all items
-    if total_revenue == 0 and orders:
-        all_rev = (
-            db.query(func.sum(OrderItem.quantity * OrderItem.price_at_order))
-            .join(Order, Order.id == OrderItem.order_id)
-            .filter(Order.created_at >= start_date)
-            .scalar()
-        )
-        total_revenue = round(float(all_rev or 0.0), 2)
+    # Calculate accurate total revenue across ALL order items in this date range
+    all_rev = (
+        db.query(func.sum(OrderItem.quantity * OrderItem.price_at_order))
+        .join(Order, Order.id == OrderItem.order_id)
+        .filter(Order.created_at >= start_date)
+        .scalar()
+    )
+    total_revenue = round(float(all_rev or 0.0), 2)
 
     avg_order_value = round(total_revenue / total_orders, 2) if total_orders > 0 else 0.0
     avg_prep_time = 14.5  # average minutes baseline estimate
@@ -89,10 +87,12 @@ def get_analytics(db: Session, date_range: str = "daily") -> dict:
     }
 
 
-def get_ai_insights(db: Session) -> dict:
+def get_ai_insights(db: Session, force_refresh: bool = False) -> dict:
     cache_key = "admin_insights"
     now = datetime.now(timezone.utc)
-    if cache_key in _insights_cache:
+
+    # Return cached if still valid and force_refresh is not requested
+    if not force_refresh and cache_key in _insights_cache:
         cached_entry = _insights_cache[cache_key]
         if (now - cached_entry["timestamp"]).total_seconds() < 900:  # 15 min cache
             return {
@@ -101,7 +101,7 @@ def get_ai_insights(db: Session) -> dict:
                 "cached": True,
             }
 
-    # Generate insights using analytics data
+    # Generate fresh insights using latest analytics data
     analytics = get_analytics(db, "daily")
     insights = _generate_groq_insights(analytics)
 
@@ -134,9 +134,15 @@ Output strictly JSON:
                 temperature=0.3,
                 response_format={"type": "json_object"},
             )
-            parsed = json.loads(resp.choices[0].message.content)
-            if "insights" in parsed and isinstance(parsed["insights"], list):
-                return parsed["insights"][:3]
+            raw = resp.choices[0].message.content.strip()
+            # Strip potential code fences
+            if raw.startswith("```"):
+                raw = raw.strip("`")
+                if raw.startswith("json"):
+                    raw = raw[4:].strip()
+            parsed = json.loads(raw)
+            if "insights" in parsed and isinstance(parsed["insights"], list) and len(parsed["insights"]) > 0:
+                return [str(item) for item in parsed["insights"][:3]]
         except Exception as e:
             logger.warning(f"Groq insights failed, using fallback: {e}")
 

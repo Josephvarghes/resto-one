@@ -20,7 +20,8 @@ def analytics(
 
 @router.get("/insights", response_model=AdminInsightOut)
 def insights(
+    force: bool = Query(False, description="Force cache invalidation and re-generate insights"),
     current_user: User = Depends(require_roles(["admin"])),
     db: Session = Depends(get_db),
 ):
-    return get_ai_insights(db)
+    return get_ai_insights(db, force_refresh=force)

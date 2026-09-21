@@ -67,5 +67,5 @@ export const billingApi = {
 // Admin API
 export const adminApi = {
   getAnalytics: (range = 'daily') => api.get('/admin/analytics', { params: { range } }),
-  getInsights: () => api.get('/admin/insights'),
+  getInsights: (force = false) => api.get('/admin/insights', { params: { force } }),
 };

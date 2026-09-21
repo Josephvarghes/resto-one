@@ -1,9 +1,35 @@
 import json
 import logging
+import time
 from typing import List, Optional, Tuple
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _extract_json_block(text: str) -> Optional[dict]:
+    """
+    Extracts and parses JSON from text, handling markdown fences and whitespace.
+    """
+    cleaned = text.strip()
+    # Strip markdown fences if present
+    if "```json" in cleaned:
+        cleaned = cleaned.split("```json")[1].split("```")[0].strip()
+    elif "```" in cleaned:
+        cleaned = cleaned.split("```")[1].split("```")[0].strip()
+
+    try:
+        return json.loads(cleaned)
+    except Exception:
+        # Try to find first '{' and last '}'
+        start = cleaned.find("{")
+        end = cleaned.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            try:
+                return json.loads(cleaned[start : end + 1])
+            except Exception:
+                pass
+    return None
 
 
 def generate_chat_reply(
@@ -15,7 +41,6 @@ def generate_chat_reply(
     Falls back to intelligent culinary dialogue heuristics if key is not configured or on failure.
     Returns (reply_text, dish_id_or_none).
     """
-    # System prompt explaining the role and available dishes
     dishes_context = "\n".join(
         [
             f"- ID {d['id']}: {d['name']} (Category: {d['category']}, Price: ₹{d['price']}). Description: {d.get('description', '')}"
@@ -42,31 +67,49 @@ CRITICAL RULES:
 """
 
     if settings.GROQ_API_KEY:
-        try:
-            from groq import Groq
-            client = Groq(api_key=settings.GROQ_API_KEY)
+        for attempt in range(2):
+            try:
+                from groq import Groq
+                client = Groq(api_key=settings.GROQ_API_KEY)
 
-            groq_messages = [{"role": "system", "content": system_prompt}]
-            for msg in messages_history:
-                role = "user" if msg.get("sender") == "user" else "assistant"
-                groq_messages.append({"role": role, "content": msg.get("message", "")})
+                groq_messages = [{"role": "system", "content": system_prompt}]
+                for msg in messages_history:
+                    role = "user" if msg.get("sender") == "user" else "assistant"
+                    groq_messages.append({"role": role, "content": msg.get("message", "")})
 
-            resp = client.chat.completions.create(
-                model=settings.GROQ_MODEL,
-                messages=groq_messages,
-                temperature=0.5,
-                response_format={"type": "json_object"},
-            )
-            raw_content = resp.choices[0].message.content
-            parsed = json.loads(raw_content)
-            reply = parsed.get("reply", "I'd love to help you find the perfect dish today!")
-            dish_rec = parsed.get("dish_recommendation")
-            dish_id = None
-            if isinstance(dish_rec, dict) and "dish_id" in dish_rec:
-                dish_id = int(dish_rec["dish_id"])
-            return reply, dish_id
-        except Exception as e:
-            logger.warning(f"Groq API call failed, using fallback engine: {e}")
+                resp = client.chat.completions.create(
+                    model=settings.GROQ_MODEL,
+                    messages=groq_messages,
+                    temperature=0.4,
+                    response_format={"type": "json_object"},
+                )
+                raw_content = resp.choices[0].message.content
+                parsed = _extract_json_block(raw_content)
+
+                if parsed and isinstance(parsed, dict):
+                    reply = parsed.get("reply", "I'd love to help you find the perfect dish today!")
+                    dish_rec = parsed.get("dish_recommendation")
+                    dish_id = None
+                    if isinstance(dish_rec, dict) and "dish_id" in dish_rec:
+                        dish_id = int(dish_rec["dish_id"])
+                    elif isinstance(dish_rec, (int, str)) and str(dish_rec).isdigit():
+                        dish_id = int(dish_rec)
+
+                    # Validate that dish_id actually exists in available_dishes
+                    if dish_id and not any(d["id"] == dish_id for d in available_dishes):
+                        dish_id = None
+
+                    return reply, dish_id
+                else:
+                    logger.warning(f"Unable to parse JSON from Groq output: {raw_content}")
+                    break
+            except Exception as e:
+                err_str = str(e)
+                logger.warning(f"Groq API call attempt {attempt + 1} failed: {err_str}")
+                if "429" in err_str and attempt == 0:
+                    time.sleep(1.0)
+                    continue
+                break
 
     # Heuristic Fallback Engine
     return _fallback_concierge(messages_history, available_dishes)
@@ -86,7 +129,6 @@ def _fallback_concierge(
 
     # Keyword searches
     if "spicy" in last_user_msg or "paneer" in last_user_msg or "chilli" in last_user_msg:
-        # Find paneer or spicy starter
         for d in available_dishes:
             if "paneer" in d["name"].lower() or "chilli" in d["name"].lower():
                 return (
@@ -123,7 +165,6 @@ def _fallback_concierge(
                 )
 
     if user_turn_count >= 2 and available_dishes:
-        # Recommend top dish
         top_dish = available_dishes[0]
         return (
             f"Based on what you've shared, I think you will love our chef's recommendation: **{top_dish['name']}**! Would you like to try it?",
