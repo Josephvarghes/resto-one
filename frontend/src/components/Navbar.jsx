@@ -10,7 +10,7 @@ import {
   Receipt,
   LogOut,
   ChevronDown,
-  Menu,
+  Eye,
 } from 'lucide-react';
 import { useCartStore } from '../store/useCartStore';
 import { useSessionStore } from '../store/useSessionStore';
@@ -34,6 +34,19 @@ export function Navbar({
     setCurrentView('guest');
   };
 
+  // Determine what controls should be visible based on role and active view
+  const isGuest = !user;
+  const isAdmin = user?.role === 'admin';
+  const isWaiter = user?.role === 'waiter';
+  const isKitchen = user?.role === 'kitchen';
+  const isBilling = user?.role === 'billing';
+
+  // Table selection is only relevant for guests, or waiters taking table orders, or admin in guest preview mode
+  const showTableSelector = isGuest || isWaiter || (isAdmin && currentView === 'guest');
+
+  // Customer guest tools (Call server, AI Concierge, Cart) should only appear for guests or when admin is previewing guest view
+  const showGuestCustomerTools = isGuest || (isAdmin && currentView === 'guest');
+
   return (
     <>
       {/* Top Navigation Bar */}
@@ -43,27 +56,28 @@ export function Navbar({
           position: 'sticky',
           top: 0,
           zIndex: 50,
-          padding: '10px 16px',
+          padding: '10px 20px',
         }}
       >
         <div
           style={{
-            maxWidth: '1400px',
+            maxWidth: '1440px',
             margin: '0 auto',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '12px',
+            gap: '14px',
           }}
         >
-          {/* Brand */}
+          {/* Brand Logo */}
           <div
-            onClick={() => setCurrentView(user ? user.role : 'guest')}
+            onClick={() => setCurrentView(user ? (isAdmin ? 'admin' : user.role) : 'guest')}
             style={{
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
               cursor: 'pointer',
+              flexShrink: 0,
             }}
           >
             <div
@@ -107,15 +121,16 @@ export function Navbar({
                   fontWeight: 600,
                 }}
               >
-                Luxury Dining Experience
+                {isAdmin ? 'Management Console' : isStaff(user) ? `${user.role.toUpperCase()} STATION` : 'Luxury Dining Experience'}
               </div>
             </div>
           </div>
 
-          {/* Desktop Center Navigation */}
-          <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {(!user || user.role === 'waiter') && (
-              <>
+          {/* Center Navigation Tabs */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', overflowX: 'auto' }}>
+            {/* 1. Guest Navigation (When not logged in) */}
+            {isGuest && (
+              <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <button
                   onClick={() => setCurrentView('guest')}
                   className={`btn ${currentView === 'guest' ? 'btn-accent-glow' : 'btn-outline'}`}
@@ -130,288 +145,326 @@ export function Navbar({
                 >
                   <Clock size={16} /> My Orders
                 </button>
-              </>
+              </div>
             )}
 
-            {user && (
+            {/* 2. Waiter Navigation */}
+            {isWaiter && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {user.role === 'kitchen' && (
-                  <button
-                    onClick={() => setCurrentView('kitchen')}
-                    className="btn btn-accent-glow"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                  >
-                    <ChefHat size={16} /> Kitchen Board
-                  </button>
-                )}
-                {user.role === 'billing' && (
-                  <button
-                    onClick={() => setCurrentView('billing')}
-                    className="btn btn-accent-glow"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                  >
-                    <Receipt size={16} /> Billing Board
-                  </button>
-                )}
-                {user.role === 'waiter' && (
-                  <button
-                    onClick={() => setCurrentView('waiter')}
-                    className="btn btn-accent-glow"
-                    style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                  >
-                    <Bell size={16} /> Waiter Floor
-                  </button>
-                )}
-                {user.role === 'admin' && (
-                  <>
-                    <button
-                      onClick={() => setCurrentView('admin')}
-                      className={`btn ${currentView === 'admin' ? 'btn-accent-glow' : 'btn-outline'}`}
-                      style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                    >
-                      <Shield size={16} /> Admin Analytics
-                    </button>
-                    <button
-                      onClick={() => setCurrentView('kitchen')}
-                      className="btn btn-outline"
-                      style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                    >
-                      Kitchen
-                    </button>
-                    <button
-                      onClick={() => setCurrentView('billing')}
-                      className="btn btn-outline"
-                      style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                    >
-                      Billing
-                    </button>
-                    <button
-                      onClick={() => setCurrentView('waiter')}
-                      className="btn btn-outline"
-                      style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-                    >
-                      Waiter
-                    </button>
-                  </>
-                )}
+                <button
+                  onClick={() => setCurrentView('waiter')}
+                  className={`btn ${currentView === 'waiter' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                >
+                  <Bell size={16} /> Waiter Floor
+                </button>
+                <button
+                  onClick={() => setCurrentView('guest')}
+                  className={`btn ${currentView === 'guest' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                >
+                  Menu Catalog
+                </button>
+              </div>
+            )}
+
+            {/* 3. Kitchen Navigation */}
+            {isKitchen && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setCurrentView('kitchen')}
+                  className="btn btn-accent-glow"
+                  style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                >
+                  <ChefHat size={16} /> Kitchen Board
+                </button>
+              </div>
+            )}
+
+            {/* 4. Billing Navigation */}
+            {isBilling && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <button
+                  onClick={() => setCurrentView('billing')}
+                  className="btn btn-accent-glow"
+                  style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                >
+                  <Receipt size={16} /> Billing Settlement
+                </button>
+              </div>
+            )}
+
+            {/* 5. Clean Executive Admin Navigation */}
+            {isAdmin && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => setCurrentView('admin')}
+                  className={`btn ${currentView === 'admin' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '7px 12px', fontSize: '0.82rem' }}
+                >
+                  <Shield size={15} /> Analytics
+                </button>
+                <button
+                  onClick={() => setCurrentView('kitchen')}
+                  className={`btn ${currentView === 'kitchen' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '7px 12px', fontSize: '0.82rem' }}
+                >
+                  <ChefHat size={15} /> Kitchen
+                </button>
+                <button
+                  onClick={() => setCurrentView('billing')}
+                  className={`btn ${currentView === 'billing' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '7px 12px', fontSize: '0.82rem' }}
+                >
+                  <Receipt size={15} /> Billing
+                </button>
+                <button
+                  onClick={() => setCurrentView('waiter')}
+                  className={`btn ${currentView === 'waiter' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '7px 12px', fontSize: '0.82rem' }}
+                >
+                  <Bell size={15} /> Waiter
+                </button>
+                <button
+                  onClick={() => setCurrentView('guest')}
+                  className={`btn ${currentView === 'guest' ? 'btn-accent-glow' : 'btn-outline'}`}
+                  style={{ padding: '7px 12px', fontSize: '0.82rem' }}
+                  title="Preview Customer Menu Experience"
+                >
+                  <Eye size={15} /> Guest Preview
+                </button>
               </div>
             )}
           </div>
 
-          {/* Right actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {/* Table Selector (both mobile and desktop) */}
-            <div style={{ position: 'relative' }}>
-              <button
-                onClick={() => setShowTableSelect(!showTableSelect)}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-md)',
-                  color: 'var(--text-primary)',
-                  padding: '7px 10px',
-                  fontSize: '0.82rem',
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <span style={{ color: 'var(--accent-gold)' }}>T#{tableNo}</span>
-                <ChevronDown size={13} />
-              </button>
-
-              {showTableSelect && (
-                <div
+          {/* Right Action Controls */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            {/* Table Selector: ONLY for guests, waiters, or admin previewing guest view */}
+            {showTableSelector && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowTableSelect(!showTableSelect)}
                   style={{
-                    position: 'absolute',
-                    top: '100%',
-                    right: 0,
-                    marginTop: '8px',
-                    background: '#151d2f',
+                    background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid var(--border-subtle)',
                     borderRadius: 'var(--radius-md)',
-                    boxShadow: 'var(--shadow-lg)',
-                    padding: '8px',
-                    zIndex: 60,
-                    width: '180px',
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(3, 1fr)',
-                    gap: '6px',
-                  }}
-                >
-                  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
-                    <button
-                      key={num}
-                      onClick={() => {
-                        setTableNo(num);
-                        setShowTableSelect(false);
-                      }}
-                      style={{
-                        background: tableNo === num ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.04)',
-                        color: tableNo === num ? '#000' : 'var(--text-primary)',
-                        border: 'none',
-                        borderRadius: 'var(--radius-sm)',
-                        padding: '6px',
-                        fontSize: '0.85rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      #{num}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Desktop Actions */}
-            <button
-              onClick={onOpenWaiterCall}
-              title="Ring Waiter"
-              className="btn btn-outline hide-on-mobile"
-              style={{ padding: '8px 12px' }}
-            >
-              <Bell size={17} color="var(--accent-gold)" />
-              <span>Server</span>
-            </button>
-
-            <button
-              onClick={onOpenChat}
-              className="btn btn-accent-glow pulse-glow hide-on-mobile"
-              style={{ padding: '8px 14px', fontSize: '0.85rem' }}
-            >
-              <Sparkles size={16} />
-              <span>AI Concierge</span>
-            </button>
-
-            <button
-              onClick={onOpenCart}
-              className="btn btn-primary hide-on-mobile"
-              style={{ padding: '8px 16px', position: 'relative' }}
-            >
-              <ShoppingBag size={18} />
-              <span>Cart</span>
-              {itemCount > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '-6px',
-                    right: '-6px',
-                    background: '#ef4444',
-                    color: '#fff',
-                    fontSize: '0.72rem',
-                    fontWeight: 700,
-                    width: '20px',
-                    height: '20px',
-                    borderRadius: '50%',
+                    color: 'var(--text-primary)',
+                    padding: '7px 10px',
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                    gap: '4px',
                   }}
                 >
-                  {itemCount}
-                </span>
-              )}
-            </button>
+                  <span style={{ color: 'var(--accent-gold)' }}>Table #{tableNo}</span>
+                  <ChevronDown size={13} />
+                </button>
 
-            {/* Staff Auth Button */}
+                {showTableSelect && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      right: 0,
+                      marginTop: '8px',
+                      background: '#151d2f',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      padding: '8px',
+                      zIndex: 60,
+                      width: '180px',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      gap: '6px',
+                    }}
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((num) => (
+                      <button
+                        key={num}
+                        onClick={() => {
+                          setTableNo(num);
+                          setShowTableSelect(false);
+                        }}
+                        style={{
+                          background: tableNo === num ? 'var(--accent-gold)' : 'rgba(255, 255, 255, 0.04)',
+                          color: tableNo === num ? '#000' : 'var(--text-primary)',
+                          border: 'none',
+                          borderRadius: 'var(--radius-sm)',
+                          padding: '6px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        #{num}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Guest Customer Tools: ONLY for guest or admin previewing guest view */}
+            {showGuestCustomerTools && (
+              <>
+                <button
+                  onClick={onOpenWaiterCall}
+                  title="Ring Server"
+                  className="btn btn-outline hide-on-mobile"
+                  style={{ padding: '8px 12px' }}
+                >
+                  <Bell size={16} color="var(--accent-gold)" />
+                  <span>Call Server</span>
+                </button>
+
+                <button
+                  onClick={onOpenChat}
+                  className="btn btn-accent-glow pulse-glow hide-on-mobile"
+                  style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+                >
+                  <Sparkles size={16} />
+                  <span>AI Concierge</span>
+                </button>
+
+                <button
+                  onClick={onOpenCart}
+                  className="btn btn-primary hide-on-mobile"
+                  style={{ padding: '8px 16px', position: 'relative' }}
+                >
+                  <ShoppingBag size={18} />
+                  <span>Cart</span>
+                  {itemCount > 0 && (
+                    <span
+                      style={{
+                        position: 'absolute',
+                        top: '-6px',
+                        right: '-6px',
+                        background: '#ef4444',
+                        color: '#fff',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.5)',
+                      }}
+                    >
+                      {itemCount}
+                    </span>
+                  )}
+                </button>
+              </>
+            )}
+
+            {/* Staff / Auth Status Button */}
             {user ? (
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '6px',
+                  gap: '8px',
                   background: 'rgba(255, 255, 255, 0.05)',
                   border: '1px solid var(--border-subtle)',
-                  padding: '4px 8px',
+                  padding: '4px 10px',
                   borderRadius: 'var(--radius-md)',
                 }}
               >
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '0.78rem', fontWeight: 600 }}>{user.name}</div>
-                  <div style={{ fontSize: '0.68rem', color: 'var(--accent-gold)', textTransform: 'uppercase' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{user.name}</div>
+                  <div style={{ fontSize: '0.68rem', color: 'var(--accent-gold)', textTransform: 'uppercase', fontWeight: 700 }}>
                     {user.role}
                   </div>
                 </div>
                 <button
                   onClick={handleRoleLogout}
-                  title="Logout"
+                  title="Sign Out"
                   style={{
                     background: 'none',
                     border: 'none',
                     color: 'var(--text-muted)',
                     cursor: 'pointer',
                     padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
                   }}
                 >
-                  <LogOut size={15} />
+                  <LogOut size={16} />
                 </button>
               </div>
             ) : (
               <button
                 onClick={onOpenStaffLogin}
                 className="btn btn-outline"
-                style={{ padding: '7px 10px', fontSize: '0.8rem' }}
+                style={{ padding: '7px 12px', fontSize: '0.82rem' }}
               >
-                Staff
+                Staff Portal
               </button>
             )}
           </div>
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Dock */}
-      <div className="mobile-bottom-nav show-on-mobile">
-        <button
-          onClick={() => setCurrentView('guest')}
-          className={`mobile-nav-btn ${currentView === 'guest' ? 'active' : ''}`}
-        >
-          <Utensils size={18} />
-          <span>Menu</span>
-        </button>
+      {/* Mobile Bottom Navigation Dock: RENDERED ONLY FOR GUESTS */}
+      {isGuest && (
+        <div className="mobile-bottom-nav show-on-mobile">
+          <button
+            onClick={() => setCurrentView('guest')}
+            className={`mobile-nav-btn ${currentView === 'guest' ? 'active' : ''}`}
+          >
+            <Utensils size={18} />
+            <span>Menu</span>
+          </button>
 
-        <button
-          onClick={() => setCurrentView('orders')}
-          className={`mobile-nav-btn ${currentView === 'orders' ? 'active' : ''}`}
-        >
-          <Clock size={18} />
-          <span>Orders</span>
-        </button>
+          <button
+            onClick={() => setCurrentView('orders')}
+            className={`mobile-nav-btn ${currentView === 'orders' ? 'active' : ''}`}
+          >
+            <Clock size={18} />
+            <span>Orders</span>
+          </button>
 
-        <button
-          onClick={onOpenChat}
-          className="mobile-nav-btn ai-btn"
-        >
-          <div className="mobile-ai-circle pulse-glow">
-            <Sparkles size={18} />
-          </div>
-          <span>AI Chat</span>
-        </button>
+          <button
+            onClick={onOpenChat}
+            className="mobile-nav-btn ai-btn"
+          >
+            <div className="mobile-ai-circle pulse-glow">
+              <Sparkles size={18} />
+            </div>
+            <span>AI Concierge</span>
+          </button>
 
-        <button
-          onClick={onOpenWaiterCall}
-          className="mobile-nav-btn"
-        >
-          <Bell size={18} />
-          <span>Server</span>
-        </button>
+          <button
+            onClick={onOpenWaiterCall}
+            className="mobile-nav-btn"
+          >
+            <Bell size={18} />
+            <span>Call Server</span>
+          </button>
 
-        <button
-          onClick={onOpenCart}
-          className="mobile-nav-btn cart-btn"
-        >
-          <div style={{ position: 'relative' }}>
-            <ShoppingBag size={18} />
-            {itemCount > 0 && (
-              <span className="mobile-badge">{itemCount}</span>
-            )}
-          </div>
-          <span>Cart</span>
-        </button>
-      </div>
+          <button
+            onClick={onOpenCart}
+            className="mobile-nav-btn cart-btn"
+          >
+            <div style={{ position: 'relative' }}>
+              <ShoppingBag size={18} />
+              {itemCount > 0 && (
+                <span className="mobile-badge">{itemCount}</span>
+              )}
+            </div>
+            <span>Cart</span>
+          </button>
+        </div>
+      )}
     </>
   );
+}
+
+function isStaff(user) {
+  return user && ['admin', 'waiter', 'kitchen', 'billing'].includes(user.role);
 }

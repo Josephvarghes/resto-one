@@ -44,9 +44,19 @@ export function AdminDashboard() {
     }
   };
 
+  const [isRefreshingSales, setIsRefreshingSales] = useState(false);
+
+  // Initial load
   useEffect(() => {
     setIsLoading(true);
     Promise.all([fetchAnalytics(), fetchInsights(false)]).finally(() => setIsLoading(false));
+  }, []);
+
+  // Update sales analytics when range filter changes (without disturbing AI Insights)
+  useEffect(() => {
+    if (!analytics) return; // avoid duplicate initial fetch
+    setIsRefreshingSales(true);
+    fetchAnalytics().finally(() => setIsRefreshingSales(false));
   }, [range]);
 
   // Real-time WebSocket connection to admin channel
@@ -160,14 +170,15 @@ export function AdminDashboard() {
           ))}
           <button
             onClick={() => {
-              fetchAnalytics();
-              fetchInsights(false);
+              setIsRefreshingSales(true);
+              fetchAnalytics().finally(() => setIsRefreshingSales(false));
             }}
+            disabled={isRefreshingSales}
             className="btn btn-outline"
-            title="Refresh View"
+            title="Refresh Sales Data"
             style={{ padding: '8px 12px' }}
           >
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
+            <RefreshCw size={16} className={isRefreshingSales ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -346,12 +357,20 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Working Refresh AI button */}
+              {/* Working Refresh AI button with fixed min-width to prevent jitter */}
               <button
                 onClick={() => fetchInsights(true)}
                 disabled={isLoadingInsights}
                 className="btn btn-primary"
-                style={{ fontSize: '0.85rem', padding: '8px 16px' }}
+                style={{
+                  fontSize: '0.85rem',
+                  padding: '8px 16px',
+                  minWidth: '145px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                }}
               >
                 <RefreshCw size={14} className={isLoadingInsights ? 'animate-spin' : ''} />
                 {isLoadingInsights ? 'Regenerating AI...' : 'Refresh AI'}
