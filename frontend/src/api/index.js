@@ -8,7 +8,7 @@ const API_BASE_URL =
 
 export const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 60000, // 60s timeout to gracefully accommodate Render cold starts
 });
 
 api.interceptors.request.use((config) => {

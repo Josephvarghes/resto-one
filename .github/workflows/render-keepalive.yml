@@ -1,0 +1,24 @@
+name: Render Backend Keep-Alive (Active Window)
+
+on:
+  schedule:
+    # Runs every 14 minutes between 02:00 UTC and 14:59 UTC
+    # Corresponds to ~7:30 AM to ~8:30 PM IST (Indian Standard Time)
+    - cron: '*/14 2-14 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub UI for testing
+
+jobs:
+  ping-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Resto-One Cloud Backend
+        run: |
+          echo "Sending keep-alive ping to Render backend..."
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" --max-time 60 https://resto-one-backend.onrender.com/)
+          echo "$RESPONSE"
+          STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          if [ "$STATUS" -eq 200 ]; then
+            echo "Backend is alive and healthy (Status: 200) at $(date)"
+          else
+            echo "Warning: Received HTTP status $STATUS at $(date)"
+          fi

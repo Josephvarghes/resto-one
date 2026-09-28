@@ -10,6 +10,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { ChatModal } from './components/ChatModal';
 import { WaiterCallModal } from './components/WaiterCallModal';
 import { StaffLoginModal } from './components/StaffLoginModal';
+import { ServerWakeOverlay } from './components/ServerWakeOverlay';
 import { useAuthStore } from './store/useAuthStore';
 import { useSessionStore } from './store/useSessionStore';
 import { useWebSocket } from './hooks/useWebSocket';
@@ -93,6 +94,7 @@ export function App() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+      <ServerWakeOverlay />
       <Navbar
         currentView={currentView}
         setCurrentView={setCurrentView}
