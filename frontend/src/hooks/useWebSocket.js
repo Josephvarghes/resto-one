@@ -13,10 +13,24 @@ export function useWebSocket(channel, onMessage) {
   const connect = useCallback(() => {
     if (!channel) return;
 
-    // Build WS URL based on current host or proxy
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/${channel}`;
+    // Determine WS URL based on env or active environment
+    let wsUrl;
+    if (import.meta.env.VITE_WS_URL) {
+      wsUrl = `${import.meta.env.VITE_WS_URL}/ws/${channel}`;
+    } else if (import.meta.env.VITE_API_URL) {
+      try {
+        const parsed = new URL(import.meta.env.VITE_API_URL);
+        const wsProto = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+        wsUrl = `${wsProto}//${parsed.host}/ws/${channel}`;
+      } catch {
+        wsUrl = `wss://resto-one-backend.onrender.com/ws/${channel}`;
+      }
+    } else if (import.meta.env.PROD) {
+      wsUrl = `wss://resto-one-backend.onrender.com/ws/${channel}`;
+    } else {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      wsUrl = `${protocol}//${window.location.host}/ws/${channel}`;
+    }
 
     try {
       const ws = new WebSocket(wsUrl);
