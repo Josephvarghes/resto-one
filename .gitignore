@@ -63,3 +63,6 @@ logs/
 Thumbs.db
 .vscode/
 .idea/
+
+# AI IDE context (replaced by CLAUDE.md)
+.agents/
